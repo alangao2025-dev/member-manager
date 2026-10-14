@@ -73,8 +73,8 @@ export default function MemberApp({ initial }: { initial: Member[] }) {
     <main className="container">
       <header className="header">
         <div>
-          <h1>会员管理</h1>
-          <p>管理你的会员信息与等级</p>
+          <h1>会员中心</h1>
+          <p suppressHydrationWarning>共 {members.length} 位会员 · 今天是 {new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "long" })}</p>
         </div>
         <button className="btn primary" onClick={openNew}>+ 新增会员</button>
       </header>
@@ -133,6 +133,8 @@ export default function MemberApp({ initial }: { initial: Member[] }) {
           </tbody>
         </table>
       </section>
+
+      <footer className="footer">由 Cloudflare Workers 驱动 · accrepo.com</footer>
 
       {open && (
         <div className="overlay" onClick={() => setOpen(false)}>
