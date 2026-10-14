@@ -1,6 +1,0 @@
-[
-  { "id": "1", "name": "张伟", "email": "zhangwei@example.com", "phone": "13800138001", "level": "金卡", "joinedAt": "2025-01-15" },
-  { "id": "2", "name": "李娜", "email": "lina@example.com", "phone": "13800138002", "level": "银卡", "joinedAt": "2025-03-02" },
-  { "id": "3", "name": "王芳", "email": "wangfang@example.com", "phone": "13800138003", "level": "钻石", "joinedAt": "2025-05-20" },
-  { "id": "4", "name": "刘洋", "email": "liuyang@example.com", "phone": "13800138004", "level": "普通", "joinedAt": "2025-08-11" }
-]
