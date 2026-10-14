@@ -111,10 +111,26 @@ cd /home/allen/compile_test
 # 尚未初始化 git 的项目先执行：
 # git init && git add -A && git commit -m "init"
 
-gh repo create member-manager --private --source=. --remote=origin --push
+gh repo create member-manager --public --source=. --remote=origin --push
 ```
 
-这一条命令会：在 GitHub 上创建私有仓库 → 添加 `origin` 远程 → 推送当前分支。
+这一条命令会：在 GitHub 上创建仓库 → 添加 `origin` 远程 → 推送当前分支。
+
+公开还是私有：
+
+| | `--public` | `--private`（免费账号） |
+| --- | --- | --- |
+| Actions 编译时长 | 标准编译机不限量 | 每月 2000 分钟，多个项目共享 |
+| 编译成品存储 | 不计入额度 | 共 500MB |
+| 代码可见性 | 所有人可见 | 仅自己可见 |
+
+练手和预览项目用 `--public`；含隐私或商业代码的项目用 `--private`。不要把密钥、真实用户数据提交进公开仓库，密钥应放在 GitHub Secrets 里。
+
+已有仓库切换可见性：
+
+```bash
+gh repo edit <用户名>/<仓库名> --visibility public --accept-visibility-change-consequences
+```
 
 ### 2.3 查看编译结果
 
