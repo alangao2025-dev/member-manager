@@ -2,7 +2,7 @@
 
 本项目是 Next.js 15 应用（带 API 路由），通过 OpenNext 适配器运行在 Cloudflare Workers 上，数据存储在 Cloudflare D1（SQLite）。
 
-当前线上地址：https://member-manager.alangao2025.workers.dev
+当前线上地址：https://member-manager.accrepo.com （备用：https://member-manager.alangao2025.workers.dev）
 
 ## 总体方案
 
@@ -188,10 +188,13 @@ push 后会自动执行。线上数据在每次发布间保留。
 ```json
 "routes": [
   { "pattern": "member-manager.你的域名.com", "custom_domain": true }
-]
+],
+"workers_dev": true
 ```
 
-3. push 后自动生效，Cloudflare 会自动签发 HTTPS 证书。
+   `workers_dev: true` 用来保留 `workers.dev` 备用地址；不写的话，配置了 `routes` 后该地址会被自动关闭。
+
+3. push 后自动生效，Cloudflare 会自动创建 DNS 记录并签发 HTTPS 证书（Let's Encrypt，自动续期）。
 
 ---
 
