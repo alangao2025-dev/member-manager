@@ -74,7 +74,7 @@ ssh -t <用户>@<新机器IP> "bash /tmp/setup-gh.sh"
 **非交互方式**（适合批量配置）：
 
 ```bash
-GH_SETUP_TOKEN=<token> GIT_NAME="<你的名字>" GIT_EMAIL="<你的邮箱>" bash scripts/setup-gh.sh
+ GH_TOKEN=<token> GIT_NAME="<你的名字>" GIT_EMAIL="<你的邮箱>" bash scripts/setup-gh.sh
 ```
 
 > 非交互方式会让 Token 留在 shell 历史里，执行后可用 `history -c` 清除，或在命令前加一个空格（bash 默认 `HISTCONTROL=ignorespace` 时不记录）。

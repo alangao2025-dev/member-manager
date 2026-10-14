@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install GitHub CLI, log in with a token, and configure git.
 # Usage: bash setup-gh.sh            (prompts for token / name / email)
-#        GH_SETUP_TOKEN=xxx GIT_NAME=xx GIT_EMAIL=xx bash setup-gh.sh   (non-interactive)
+#        GH_TOKEN=xxx GIT_NAME=xx GIT_EMAIL=xx bash setup-gh.sh   (non-interactive)
 set -euo pipefail
 
 info() { printf '\033[32m==>\033[0m %s\n' "$*"; }
@@ -53,7 +53,7 @@ login_gh() {
   if gh_stored auth status >/dev/null 2>&1; then
     info "gh 已登录"
   else
-    local token="${GH_SETUP_TOKEN:-}"
+    local token="${GH_SETUP_TOKEN:-${GH_TOKEN:-}}"
     if [ -z "$token" ]; then
       read -rsp "请粘贴 GitHub Token（输入不显示）: " token </dev/tty; echo
     fi
