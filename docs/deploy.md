@@ -22,43 +22,7 @@
 
 ## 第零步：一次性准备（网页操作）
 
-### 0.1 GitHub：为每台开发机创建一个 Token
-
-每台机器单独一个 Token，命名带机器名（如 `cloud-a`）。某台机器出问题时只需吊销对应 Token，不影响其他机器。
-
-GitHub → 头像 → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token：
-
-- **Token name**：机器名，例如 `cloud-a`
-- **Resource owner**：自己的账号
-- **Expiration**：设置过期时间，到期前重新生成即可
-- **Repository access**：**All repositories**（否则以后新建的仓库无法使用该 Token）
-- **Repository permissions**（新版界面需先点 **Add permissions**）：
-
-| 权限 | 级别 | 用途 |
-| --- | --- | --- |
-| Actions | Read and write | 查看编译状态、手动触发编译 |
-| Administration | Read and write | 新建仓库 |
-| Contents | Read and write | 推送代码 |
-| Secrets | Read and write | 用命令行配置 Cloudflare 凭据 |
-| Workflows | Read and write | 推送 `.github/workflows` 下的文件 |
-| Metadata | Read-only | 必选（自动勾上） |
-
-生成后**立即复制保存**，页面关闭后无法再次查看。权限漏选时可以在 Token 页面点 **Edit** 修改，Token 值不变。
-
-> Token 等同于账号密码，不要提交到任何仓库，也不要发到聊天里。
-
-### 0.2 Cloudflare：Account ID 和 API Token
-
-1. 注册 / 登录 https://dash.cloudflare.com （Free 套餐即可），进入 **Workers & Pages**。不需要点 Create application，首次发布时会自动创建。
-2. **Account ID**：Workers & Pages 页面右侧栏，或浏览器地址栏 `dash.cloudflare.com/` 后的 32 位字符串。
-3. **API Token**：头像 → My Profile → API Tokens → Create Token → **Edit Cloudflare Workers** 模板 → Use template：
-   - Permissions 点 **+ Add more**，补充 `Account` → `D1` → `Edit`（模板默认不含 D1）
-   - Account Resources：Include → 自己的账号
-   - Zone Resources：Include → All zones from an account → 自己的账号
-   - Client IP 过滤留空（GitHub 编译机 IP 不固定）
-   - Continue to summary → Create Token → **立即复制**
-
-这两个值只存在 GitHub Secrets 中（见 3.2），开发机上不需要保存。
+GitHub Token、Cloudflare Account ID 和 API Token 的创建步骤见 **[platform-setup.md](platform-setup.md)**。
 
 ---
 
@@ -180,7 +144,7 @@ gh secret set CLOUDFLARE_ACCOUNT_ID
 gh secret list
 ```
 
-Secrets 按仓库存储，每个新仓库都要配置一次。如果报 `HTTP 403: Resource not accessible by personal access token`，说明 GitHub Token 缺少 **Secrets: Read and write** 权限（见 0.1）。
+Secrets 按仓库存储，每个新仓库都要配置一次。如果报 `HTTP 403: Resource not accessible by personal access token`，说明 GitHub Token 缺少 **Secrets: Read and write** 权限，修改方法见 [platform-setup.md](platform-setup.md#7-修改已有-token-的权限)。
 
 ### 3.3 发布流程
 
