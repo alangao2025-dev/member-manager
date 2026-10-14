@@ -1,48 +1,64 @@
-# 部署指南：GitHub Actions 编译 + 云服务器运行
+# 部署指南：GitHub Actions 编译 + Cloudflare Workers 预览
 
-本项目是 Next.js 15 应用，带 API 路由，并把数据写入 `members.json`，因此服务器上必须运行 Node.js，不能作为纯静态网站部署。
+本项目是 Next.js 15 应用（带 API 路由），通过 OpenNext 适配器运行在 Cloudflare Workers 上，数据存储在 Cloudflare D1（SQLite）。
+
+当前线上地址：https://member-manager.alangao2025.workers.dev
 
 ## 总体方案
 
 ```
-云服务器(开发机) --gh / git push--> GitHub --Actions 编译--> release.tar.gz --SSH 部署--> 目标服务器 (node server.js)
+开发机 --git push--> GitHub --Actions: 编译 + 建库 + 迁移 + 发布--> Cloudflare Workers --> 浏览器预览
 ```
 
-原则：**GitHub 网页只在前期操作一次（创建 Token），之后所有操作都在云服务器上通过 `gh` 命令行完成。**
+原则：**GitHub 和 Cloudflare 网页只在前期操作一次（创建 Token），之后所有操作都在开发机上通过命令行完成。**
 
 | 角色 | 说明 |
 | --- | --- |
-| 开发机 | 写代码的云服务器，可以有多台，每台一个 Token |
-| GitHub | 存代码 + 用 Actions 编译 |
-| 目标服务器 | 运行编译后的成品，供浏览器访问 |
+| 开发机 | 写代码的云服务器，可以有多台，每台一个 GitHub Token |
+| GitHub | 存代码 + 用 Actions 编译和发布 |
+| Cloudflare | 运行网站（Workers）+ 存数据（D1），免费套餐 |
 
 ---
 
-## 第零步：一次性准备（GitHub 网页）
+## 第零步：一次性准备（网页操作）
 
-### 0.1 为每台开发机创建一个 Token
+### 0.1 GitHub：为每台开发机创建一个 Token
 
 每台机器单独一个 Token，命名带机器名（如 `cloud-a`）。某台机器出问题时只需吊销对应 Token，不影响其他机器。
 
-GitHub → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token：
+GitHub → 头像 → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token：
 
 - **Token name**：机器名，例如 `cloud-a`
+- **Resource owner**：自己的账号
 - **Expiration**：设置过期时间，到期前重新生成即可
 - **Repository access**：**All repositories**（否则以后新建的仓库无法使用该 Token）
-- **Repository permissions**：
+- **Repository permissions**（新版界面需先点 **Add permissions**）：
 
 | 权限 | 级别 | 用途 |
 | --- | --- | --- |
+| Actions | Read and write | 查看编译状态、手动触发编译 |
 | Administration | Read and write | 新建仓库 |
 | Contents | Read and write | 推送代码 |
+| Secrets | Read and write | 用命令行配置 Cloudflare 凭据 |
 | Workflows | Read and write | 推送 `.github/workflows` 下的文件 |
-| Actions | Read and write | 查看编译状态、下载成品、手动触发编译 |
-| Secrets | Read and write | 用命令行配置部署所需的 Secrets |
 | Metadata | Read-only | 必选（自动勾上） |
 
-生成后**立即复制保存** Token，页面关闭后无法再次查看。
+生成后**立即复制保存**，页面关闭后无法再次查看。权限漏选时可以在 Token 页面点 **Edit** 修改，Token 值不变。
 
 > Token 等同于账号密码，不要提交到任何仓库，也不要发到聊天里。
+
+### 0.2 Cloudflare：Account ID 和 API Token
+
+1. 注册 / 登录 https://dash.cloudflare.com （Free 套餐即可），进入 **Workers & Pages**。不需要点 Create application，首次发布时会自动创建。
+2. **Account ID**：Workers & Pages 页面右侧栏，或浏览器地址栏 `dash.cloudflare.com/` 后的 32 位字符串。
+3. **API Token**：头像 → My Profile → API Tokens → Create Token → **Edit Cloudflare Workers** 模板 → Use template：
+   - Permissions 点 **+ Add more**，补充 `Account` → `D1` → `Edit`（模板默认不含 D1）
+   - Account Resources：Include → 自己的账号
+   - Zone Resources：Include → All zones from an account → 自己的账号
+   - Client IP 过滤留空（GitHub 编译机 IP 不固定）
+   - Continue to summary → Create Token → **立即复制**
+
+这两个值只存在 GitHub Secrets 中（见 3.2），开发机上不需要保存。
 
 ---
 
@@ -71,13 +87,13 @@ scp scripts/setup-gh.sh <用户>@<新机器IP>:/tmp/
 ssh -t <用户>@<新机器IP> "bash /tmp/setup-gh.sh"
 ```
 
-**非交互方式**（适合批量配置）：
+**非交互方式**（适合批量配置，命令前加一个空格可避免记入 shell 历史）：
 
 ```bash
  GH_TOKEN=<token> GIT_NAME="<你的名字>" GIT_EMAIL="<你的邮箱>" bash scripts/setup-gh.sh
 ```
 
-> 非交互方式会让 Token 留在 shell 历史里，执行后可用 `history -c` 清除，或在命令前加一个空格（bash 默认 `HISTCONTROL=ignorespace` 时不记录）。
+如果 Token 已被记入历史：`history | grep GH_TOKEN` 找到编号，`history -d <编号> && history -w` 删除。
 
 ### 1.2 验证
 
@@ -86,32 +102,27 @@ gh auth status        # 显示 Logged in to github.com account <用户名>
 git config --global --list | grep user
 ```
 
+### 1.3 注意：服务进程需要 HOME
+
+AI 助手等以 systemd 服务方式运行的程序，如果服务配置里没有 `User=` 或 `HOME`，执行的命令拿不到 `HOME`，`gh` 和 `git` 会找不到登录信息。需要在 service 文件的 `[Service]` 中加：
+
+```ini
+Environment=HOME=/root
+```
+
+然后 `sudo systemctl daemon-reload && sudo systemctl restart <服务名>`。
+
 ---
 
-## 第二步：新建项目并在 GitHub 编译
-
-### 2.1 项目需要具备的文件
-
-以本项目为例，已经准备好：
-
-| 文件 | 作用 |
-| --- | --- |
-| `next.config.mjs` | 设置 `output: "standalone"`，编译出可直接 `node server.js` 运行的独立包 |
-| `lib/store.ts` | 支持环境变量 `DATA_DIR` 指定数据目录，重新部署时不会覆盖数据 |
-| `.github/workflows/build.yml` | push 到 `main` 时自动编译，成品打包为 `release.tar.gz` artifact |
-| `.gitignore` | 忽略 `node_modules`、`.next`、`.env*` |
-
-其他 Next.js 项目可以复制 `next.config.mjs` 的 `output` 配置和 `.github/workflows/build.yml` 直接复用。
-
-### 2.2 在命令行创建 GitHub 仓库并推送
+## 第二步：创建 GitHub 仓库
 
 ```bash
-cd /home/allen/compile_test
+cd <项目目录>
 
 # 尚未初始化 git 的项目先执行：
 # git init && git add -A && git commit -m "init"
 
-gh repo create member-manager --public --source=. --remote=origin --push
+gh repo create <仓库名> --public --source=. --remote=origin --push
 ```
 
 这一条命令会：在 GitHub 上创建仓库 → 添加 `origin` 远程 → 推送当前分支。
@@ -124,7 +135,7 @@ gh repo create member-manager --public --source=. --remote=origin --push
 | 编译成品存储 | 不计入额度 | 共 500MB |
 | 代码可见性 | 所有人可见 | 仅自己可见 |
 
-练手和预览项目用 `--public`；含隐私或商业代码的项目用 `--private`。不要把密钥、真实用户数据提交进公开仓库，密钥应放在 GitHub Secrets 里。
+练手和预览项目用 `--public`；含隐私或商业代码的项目用 `--private`。不要把密钥、真实用户数据提交进公开仓库。
 
 已有仓库切换可见性：
 
@@ -132,131 +143,95 @@ gh repo create member-manager --public --source=. --remote=origin --push
 gh repo edit <用户名>/<仓库名> --visibility public --accept-visibility-change-consequences
 ```
 
-### 2.3 查看编译结果
-
-```bash
-gh run list --limit 5          # 最近的编译记录
-gh run watch                   # 实时跟踪正在进行的编译
-gh run view --log-failed       # 编译失败时查看错误日志
-gh workflow run build.yml      # 不推送代码，手动触发一次编译
-```
-
-看到状态为 `completed` / `success` 即编译成功。
-
-### 2.4 （可选）下载成品到本机检查
-
-```bash
-gh run download --name release --dir /tmp/release
-tar -tzf /tmp/release/release.tar.gz | head
-```
-
-之后的日常流程就是：改代码 → `git commit` → `git push` → `gh run watch`。
-
 ---
 
-## 第三步：部署到目标服务器
+## 第三步：发布到 Cloudflare
 
-> GitHub Actions 的部署任务会在第二步跑通后加入 `build.yml`。下面是目标服务器端需要做的准备。
+### 3.1 项目需要具备的文件
 
-### 3.1 需要提供的信息
+| 文件 | 作用 |
+| --- | --- |
+| `wrangler.json` | Worker 名称（即预览子域名）、D1 绑定。`database_id` 为占位值，部署时自动替换 |
+| `open-next.config.ts` | OpenNext 适配器配置 |
+| `migrations/*.sql` | D1 数据库结构和初始数据，按文件名顺序执行，已执行过的不会重复执行 |
+| `lib/store.ts` | 通过 `getCloudflareContext().env.DB` 读写 D1 |
+| `cloudflare-env.d.ts` | 绑定的 TypeScript 类型，修改 `wrangler.json` 后执行 `npm run cf:types` 重新生成 |
+| `.github/workflows/deploy.yml` | 编译和发布流程 |
 
-- 目标服务器操作系统（如 Ubuntu 22.04 / Debian 12）
-- 公网 IP、SSH 用户名和端口
-- 是否已安装 Node.js（需要 18.18 及以上，推荐 22）
-- 访问方式：`http://IP:3000` 直接访问，还是域名 + Nginx 反向代理（可选 HTTPS）
+`package.json` 中的脚本：
 
-### 3.2 安装 Node.js（如未安装）
+| 命令 | 作用 |
+| --- | --- |
+| `npm run cf:build` | 用 OpenNext 编译出 Workers 版本（输出到 `.open-next/`） |
+| `npm run cf:types` | 根据 `wrangler.json` 生成绑定类型 |
 
-```bash
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs
-node -v
-```
+Cloudflare Workers 运行环境的限制：
 
-### 3.3 准备目录
+- **不能写本地文件**，数据要存 D1 / KV / R2
+- 免费套餐压缩后的代码包上限 3 MiB（本项目约 860 KiB），每天约 10 万次请求
 
-```bash
-sudo mkdir -p /opt/member-manager/app /opt/member-manager/data
-sudo chown -R $USER:$USER /opt/member-manager
-```
+### 3.2 配置仓库 Secrets（每个仓库一次）
 
-- `/opt/member-manager/app`：每次部署覆盖的程序文件
-- `/opt/member-manager/data`：会员数据，部署时**不会**被覆盖
-
-首次部署前放入初始数据（在开发机项目目录执行）：
+在项目目录执行（或加 `-R <用户名>/<仓库名>` 在任意目录执行），按提示粘贴值：
 
 ```bash
-scp data/members.json <用户>@<服务器IP>:/opt/member-manager/data/
-```
-
-### 3.4 创建部署专用 SSH 密钥并配置 Secrets（在开发机执行）
-
-GitHub Actions 用这个密钥登录目标服务器上传成品：
-
-```bash
-ssh-keygen -t ed25519 -f /tmp/deploy_key -N "" -C "github-actions-deploy"
-ssh-copy-id -i /tmp/deploy_key.pub <用户>@<服务器IP>
-
-# 用 gh 写入仓库 Secrets，无需打开网页
-gh secret set SSH_HOST --body "<服务器IP>"
-gh secret set SSH_USER --body "<SSH用户名>"
-gh secret set SSH_PORT --body "22"
-gh secret set SSH_KEY  < /tmp/deploy_key
-
-rm /tmp/deploy_key /tmp/deploy_key.pub
+gh secret set CLOUDFLARE_API_TOKEN
+gh secret set CLOUDFLARE_ACCOUNT_ID
 gh secret list
 ```
 
-### 3.5 用 systemd 运行服务（在目标服务器执行）
+Secrets 按仓库存储，每个新仓库都要配置一次。如果报 `HTTP 403: Resource not accessible by personal access token`，说明 GitHub Token 缺少 **Secrets: Read and write** 权限（见 0.1）。
 
-创建 `/etc/systemd/system/member-manager.service`：
+### 3.3 发布流程
 
-```ini
-[Unit]
-Description=Member Manager (Next.js)
-After=network.target
+push 到 `main`（或手动 `gh workflow run deploy.yml`）后，`deploy.yml` 依次执行：
 
-[Service]
-User=<SSH用户名>
-WorkingDirectory=/opt/member-manager/app
-Environment=NODE_ENV=production
-Environment=PORT=3000
-Environment=HOSTNAME=0.0.0.0
-Environment=DATA_DIR=/opt/member-manager/data
-ExecStart=/usr/bin/node server.js
-Restart=always
+1. `npm ci` 安装依赖
+2. 按 `wrangler.json` 中的 `database_name` 查找 D1 数据库，不存在则自动创建，并把真实 ID 写入 `wrangler.json`（仅在编译机上，不会提交回仓库）
+3. `wrangler d1 migrations apply` 执行尚未执行过的 `migrations/*.sql`
+4. `npm run cf:build` 编译
+5. `wrangler deploy` 发布
 
-[Install]
-WantedBy=multi-user.target
-```
+整个过程约 1–2 分钟。首次发布后访问：`https://<worker名>.<你的子域>.workers.dev`
+
+### 3.4 查看发布结果
 
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable member-manager
+gh run list --limit 5          # 最近的发布记录
+gh run watch                   # 实时跟踪正在进行的发布
+gh run view --log-failed       # 失败时查看错误日志
+gh workflow run deploy.yml     # 不推送代码，手动触发一次发布
 ```
 
-部署任务上传新版本后会执行 `sudo systemctl restart member-manager`。如果 SSH 用户不是 root，需要允许它免密重启该服务：
+日常流程：改代码 → `git commit` → `git push` → `gh run watch` → 打开预览地址。
 
-```bash
-echo "<SSH用户名> ALL=(root) NOPASSWD: /usr/bin/systemctl restart member-manager" | sudo tee /etc/sudoers.d/member-manager
+### 3.5 修改数据库结构
+
+不要修改已经执行过的迁移文件，新增一个编号更大的文件，例如：
+
+```sql
+-- migrations/0002_add_note.sql
+ALTER TABLE members ADD COLUMN note TEXT NOT NULL DEFAULT '';
 ```
 
-### 3.6 开放端口并访问
+push 后会自动执行。线上数据在每次发布间保留。
 
-- 在云服务商控制台的**安全组 / 防火墙**放行 TCP `3000`（使用 Nginx 时放行 `80`/`443`）。
-- 服务器本机有防火墙时也要放行，例如 `sudo ufw allow 3000`。
-- 浏览器访问：`http://<服务器IP>:3000`
+### 3.6 绑定自己的域名（可选）
 
-### 3.7 常用排查命令
+1. Cloudflare 控制台 → Add a site → 添加域名，到域名注册商处把 Nameserver 改为 Cloudflare 提供的地址，等待生效。
+2. 在 `wrangler.json` 中加入：
 
-```bash
-sudo systemctl status member-manager      # 运行状态
-sudo journalctl -u member-manager -f      # 实时日志
-sudo systemctl restart member-manager     # 手动重启
+```json
+"routes": [
+  { "pattern": "member-manager.你的域名.com", "custom_domain": true }
+]
 ```
+
+3. push 后自动生效，Cloudflare 会自动签发 HTTPS 证书。
 
 ---
 
 ## 附：后续计划
 
-- 把 GitHub 相关操作（建仓库、推送、查看编译、配置 Secrets）封装成 skill，供 AI 助手直接调用。
+- 新建项目脚本：一条命令完成 建目录 → 套用模板 → 建 GitHub 仓库 → 配置 Cloudflare Secrets → 首次发布。
+- 把 GitHub / Cloudflare 相关操作封装成 skill，供 AI 助手直接调用。
