@@ -1,12 +1,12 @@
-# cf-preview 使用说明
+# site-builder 使用说明
 
-cf-preview 让 AI 把你和它一起写的网站发布到 Cloudflare，得到一个可以直接打开的预览地址：
+site-builder 让 AI 把你和它一起写的网站发布到 Cloudflare，得到一个可以直接打开的预览地址：
 
 ```
 https://<项目名>.accrepo.com
 ```
 
-使用前，这台机器需要已经按 [cf-preview-install.md](cf-preview-install.md) 配置好。
+使用前，这台机器需要已经按 [site-builder-install.md](site-builder-install.md) 配置好。
 
 ---
 
@@ -21,10 +21,10 @@ https://<项目名>.accrepo.com
 - “做一个咖啡店官网，做完发布”
 - “把首页标题改成红色，然后发布”
 
-如果 AI 没有自动使用，在消息前面加上 `/skill:cf-preview` 强制使用：
+如果 AI 没有自动使用，在消息前面加上 `/skill:site-builder` 强制使用：
 
 ```
-/skill:cf-preview 发布当前项目
+/skill:site-builder 发布当前项目
 ```
 
 ---
@@ -122,13 +122,13 @@ GitHub Actions 几乎什么都能编译，真正的限制在 Cloudflare 能运�
 
 ```bash
 # 检查环境
-bash ~/.agents/skills/cf-preview/scripts/setup.sh --check
+bash ~/.agents/skills/site-builder/scripts/setup.sh --check
 
 # 发布项目（目录里需要已有 wrangler.json 和 .github/workflows/deploy.yml）
-bash ~/.agents/skills/cf-preview/scripts/publish.sh -m "说明本次改动" <项目目录>
+bash ~/.agents/skills/site-builder/scripts/publish.sh -m "说明本次改动" <项目目录>
 
 # 首次发布建成私有仓库
-bash ~/.agents/skills/cf-preview/scripts/publish.sh --private -m "init" <项目目录>
+bash ~/.agents/skills/site-builder/scripts/publish.sh --private -m "init" <项目目录>
 ```
 
 查看发布记录：

@@ -1,6 +1,6 @@
-# cf-preview 新机器部署指南
+# site-builder 新机器部署指南
 
-把 cf-preview skill 装到一台新的开发机上。完成后，在这台机器上和 AI 对话就能把项目发布到 `https://<项目名>.accrepo.com`。
+把 site-builder skill 装到一台新的开发机上。完成后，在这台机器上和 AI 对话就能把项目发布到 `https://<项目名>.accrepo.com`。
 
 整个过程分三部分：
 
@@ -58,19 +58,19 @@ Repository permissions（新版界面先点 **Add permissions**）：
 
 ## 二、把 skill 拷到新机器
 
-skill 是一个目录：`~/.agents/skills/cf-preview/`。在已经装好 skill 的机器上执行：
+skill 是一个目录：`~/.agents/skills/site-builder/`。在已经装好 skill 的机器上执行：
 
 ```bash
 ssh <用户>@<新机器> "mkdir -p ~/.agents/skills"
-scp -r ~/.agents/skills/cf-preview <用户>@<新机器>:~/.agents/skills/
+scp -r ~/.agents/skills/site-builder <用户>@<新机器>:~/.agents/skills/
 ```
 
-也可以把这个目录放进一个 GitHub 仓库，新机器上 `git clone` 到 `~/.agents/skills/cf-preview`，以后更新用 `git pull`。
+也可以把这个目录放进一个 GitHub 仓库，新机器上 `git clone` 到 `~/.agents/skills/site-builder`，以后更新用 `git pull`。
 
 拷完后确认：
 
 ```bash
-ls ~/.agents/skills/cf-preview/SKILL.md
+ls ~/.agents/skills/site-builder/SKILL.md
 ```
 
 ---
@@ -80,7 +80,7 @@ ls ~/.agents/skills/cf-preview/SKILL.md
 在新机器的**终端**里执行（不要让 AI 代为执行，它需要你输入 Token）：
 
 ```bash
-bash ~/.agents/skills/cf-preview/scripts/setup.sh
+bash ~/.agents/skills/site-builder/scripts/setup.sh
 ```
 
 脚本会依次：
@@ -88,7 +88,7 @@ bash ~/.agents/skills/cf-preview/scripts/setup.sh
 1. 安装 `gh`（支持 Debian/Ubuntu、CentOS/RHEL/Fedora、macOS；已装则跳过）
 2. 提示粘贴 **GitHub Token**，登录并让 `git push` 使用这个凭据
 3. 提示输入 git 提交用户名和邮箱（已设置则跳过）
-4. 提示粘贴 **Cloudflare API Token** 和 **Account ID**，在线验证有效后保存到 `~/.config/cf-preview/config`（权限 600，只有自己能读）
+4. 提示粘贴 **Cloudflare API Token** 和 **Account ID**，在线验证有效后保存到 `~/.config/site-builder/config`（权限 600，只有自己能读）
 
 输入 Token 时屏幕不显示内容，属于正常现象。看到 `全部完成` 即成功。
 
@@ -100,13 +100,13 @@ bash ~/.agents/skills/cf-preview/scripts/setup.sh
  GH_TOKEN=<GitHub Token> \
  GIT_NAME="<名字>" GIT_EMAIL="<邮箱>" \
  CLOUDFLARE_API_TOKEN=<Cloudflare Token> CLOUDFLARE_ACCOUNT_ID=<Account ID> \
- bash ~/.agents/skills/cf-preview/scripts/setup.sh
+ bash ~/.agents/skills/site-builder/scripts/setup.sh
 ```
 
 ### 验证
 
 ```bash
-bash ~/.agents/skills/cf-preview/scripts/setup.sh --check
+bash ~/.agents/skills/site-builder/scripts/setup.sh --check
 ```
 
 全部为绿色、最后显示 `环境就绪` 即可。
@@ -141,7 +141,7 @@ sudo systemctl daemon-reload && sudo systemctl restart <服务名>
 默认域名是 `accrepo.com`。换成其他已接入 Cloudflare 的域名：
 
 ```bash
- CF_RESET=1 PREVIEW_DOMAIN=<新域名> bash ~/.agents/skills/cf-preview/scripts/setup.sh
+ CF_RESET=1 PREVIEW_DOMAIN=<新域名> bash ~/.agents/skills/site-builder/scripts/setup.sh
 ```
 
 只影响之后新建的项目；已有项目的域名写在各自的 `wrangler.json` 里。
@@ -155,7 +155,7 @@ sudo systemctl daemon-reload && sudo systemctl restart <服务名>
 | GitHub Token 到期或泄露 | 网页上删除旧 Token、新建一个；新机器上 `gh auth logout`，再运行 `setup.sh` |
 | GitHub Token 缺权限（报 403） | 网页上编辑该 Token 补权限，值不变，立即生效 |
 | Cloudflare Token 到期或泄露 | 网页上 Roll 或新建；每台机器执行 `CF_RESET=1 bash .../setup.sh` 重新输入；已有仓库的 Secrets 需要逐个更新：`gh secret set CLOUDFLARE_API_TOKEN -R <owner>/<repo>` |
-| 停用某台机器 | 删除它的 GitHub Token；删除该机器上的 `~/.config/cf-preview/config` |
+| 停用某台机器 | 删除它的 GitHub Token；删除该机器上的 `~/.config/site-builder/config` |
 | 更新 skill | 用第二节的方法重新拷贝整个目录，然后在对话中 `/reload` |
 
 ## 六、常见错误
