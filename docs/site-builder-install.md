@@ -122,19 +122,64 @@ bash ~/.agents/skills/site-builder/scripts/setup.sh --check
 
 ### AI 以 systemd 服务运行时要设置 HOME
 
-如果 pi-web 等 AI 服务由 systemd 启动，而 service 文件里没有 `User=` 或 `HOME`，AI 执行命令时找不到 `gh` 的登录信息，会误报“GitHub 未登录”。在 service 文件的 `[Service]` 中加：
+如果 pi-web 等 AI 服务由 systemd 启动，而 service 文件里没有 `User=` 或 `HOME`，AI 执行命令时找不到 `gh` 的登录信息，会误报“GitHub 未登录”。
 
-```ini
-Environment=HOME=/root
+**1. 找到 service 文件**
+
+本机 pi-web 的 service 文件是：
+
+```
+/etc/systemd/system/pi-web.service
 ```
 
-然后执行（会中断当前 AI 对话）：
+其他机器上服务名或路径可能不同，用下面的命令查：
 
 ```bash
-sudo systemctl daemon-reload && sudo systemctl restart <服务名>
+systemctl list-units --type=service | grep -i pi     # 找服务名，例如 pi-web.service
+systemctl cat pi-web                                 # 第一行注释就是文件路径
 ```
 
-脚本自身在 `HOME` 为空时会默认使用 `/root`；用非 root 用户运行服务时必须正确设置 `HOME`。
+**2. 确认是否已经设置**
+
+```bash
+grep -n "HOME" /etc/systemd/system/pi-web.service
+```
+
+有输出 `Environment=HOME=/root` 就不用改了。
+
+**3. 编辑文件**
+
+```bash
+sudo nano /etc/systemd/system/pi-web.service
+```
+
+在 `[Service]` 段里加一行 `Environment=HOME=/root`，改完后类似：
+
+```ini
+[Service]
+Environment=PATH=...
+Environment=PI_WEB_NO_OPEN=1
+Environment=SHELL=/bin/bash
+Environment=HOME=/root
+ExecStart=...
+```
+
+服务以非 root 用户运行（有 `User=xxx`）时，改成该用户的家目录，例如 `Environment=HOME=/home/xxx`。
+
+**4. 重新加载并重启**（会中断当前 AI 对话，刷新页面后重新进入即可）
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart pi-web
+```
+
+**5. 验证**
+
+```bash
+cat /proc/$(systemctl show -p MainPID --value pi-web)/environ | tr '\0' '\n' | grep ^HOME
+```
+
+输出 `HOME=/root` 即生效。也可以让 AI 执行 `echo $HOME` 确认。
 
 ### 更换预览域名
 
